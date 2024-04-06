@@ -1,84 +1,97 @@
 const { spawn } = require('child_process');
 const { spawnSync } = require('child_process');
-
-const express = require('express')
 const fs = require('fs');
 const { readdir } = require('fs');
+const WebSocket = require('ws');
 
-const app = express()
-app.use(express.json());
-const port = 3000
+const wss = new WebSocket.Server({ port: 3000 });
 
-app.post('/api/run', (req, res) => {
-    console.clear();
-    const command = fs.readFileSync('./run.txt', 'utf8');
-    console.log('command:', command);
-    const childProcess = spawn(command, [], { shell: true});
-    childProcess.stdout.setEncoding('utf-8');
+wss.on('connection', handleConnection);
 
-    process.stdin.pipe(childProcess.stdin);
+function handleConnection(ws) {
+    let childProcess;
+    let stdinQueue = [];
+    ws.on('message', handleMessage);
 
+    function handleMessage(message) {
+        const data = JSON.parse(message);
+        const { type, payload } = data;
 
-    childProcess.stdout.on('data', (chunk) => {
-        console.log('stdout chunk:', chunk);
-    });
-
-    childProcess.stderr.on('data', (chunk) => {
-        console.error(`stderr: ${chunk}`);
-    });
-
-
-    childProcess.on('exit', (code, signal) => {
-        console.log('Process exited with code:', code);
-    });
-
-    // Handle process error
-    childProcess.on('error', (err) => {
-        console.error('Error executing command:', err);
-    });
-});
-
-
-app.post('/api/create_file', (req, res) => {
-    const { fileName, content } = req.body;
-    const filePath = `./UserCode/${fileName}`;
-
-    fs.writeFile(filePath, content, (err) => {
-        if (err) {
-            console.error(err);
-            res.status(500).send('Error creating file');
-        } else {
-            res.send('File created successfully');
+        switch (type) {
+            case 'run':
+                console.log(`running command: ${payload}`);
+                runCommand(payload);
+                break;
+            case 'stdin':
+                handleStdin(payload);
+                break;
+            case 'create_file':
+                handleCreateFile(payload);
+                break;
+            case 'get_all_content':
+                handleGetAllContent();
+                break;
+            default:
+                ws.send(JSON.stringify({ type: 'error', payload: 'Invalid request' }));
+                break;
         }
-    });
-});
+    }
 
-app.post('/api/get_all_content', (req, res) => {
-    const directoryPath = './UserCode';
+    function runCommand(command) {
+        childProcess = spawn(command, [], { shell: true });
 
-    readdir(directoryPath, (err, files) => {
-        if (err) {
-            console.error(err);
-            res.status(500).send('Error getting directory content');
-        } else {
-            res.send(files);
+        childProcess.stdout.on('data', (data) => {
+            ws.send(JSON.stringify({ type: 'stdout', payload: data.toString() }));
+        });
+
+        childProcess.stderr.on('data', (data) => {
+            ws.send(JSON.stringify({ type: 'stderr', payload: data.toString() }));
+        });
+
+        childProcess.on('exit', (code) => {
+            ws.send(JSON.stringify({ type: 'exit', payload: code }));
+        });
+
+        while (stdinQueue.length > 0) {
+            const queuedPayload = stdinQueue.shift();
+            childProcess.stdin.write(queuedPayload + '\n');
         }
-    });
-});
+    }
 
-app.post('/api/get_directory_content', (req, res) => {
-    // TODO: implement this endpoint
-})
+    function handleStdin(payload) {
+        if (childProcess && childProcess.stdin.writable) {
+            childProcess.stdin.write(payload + '\n');
+        } else {
+            stdinQueue.push(payload);
+        }
+    }
 
-app.post('/api/get_file_content', (req, res) => {
+    function handleCreateFile(payload) {
+        const { fileName, content } = payload;
+        const filePath = `./UserCode/${fileName}`;
 
-})
+        fs.writeFile(filePath, content, (err) => {
+            if (err) {
+                console.error(err);
+                ws.send(JSON.stringify({ type: 'error', payload: 'Error creating file' }));
+            } else {
+                ws.send(JSON.stringify({ type: 'success', payload: 'File created successfully' }));
+            }
+        });
+    }
 
-app.post('/api/modify_run_script', (req, res) => {
+    function handleGetAllContent() {
+        const directoryPath = './UserCode';
 
-})
+        readdir(directoryPath, (err, files) => {
+            if (err) {
+                console.error(err);
+                ws.send(JSON.stringify({ type: 'error', payload: 'Error getting directory content' }));
+            } else {
+                ws.send(JSON.stringify({ type: 'content', payload: files }));
+            }
+        });
+    }
+}
 
-
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
+console.log('WebSocket server listening on port 3000');

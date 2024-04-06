@@ -1,5 +1,5 @@
 const readline = require('readline');
-console.log("jsadasdawda")
+
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout

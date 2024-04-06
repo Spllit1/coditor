@@ -1,63 +1,59 @@
-const axios = require('axios');
-const fs = require('fs');
+const WebSocket = require('ws');
+const readline = require('readline');
 
-/*
-const data = {
-    key: `
-import time
-for i in range(10):
-    print(i)
-    time.sleep(1)
-`
-};
+// Create a WebSocket connection
+const ws = new WebSocket('ws://localhost:3000');
 
-axios.post('http://localhost:3000/api/run', data)
-    .then((res) => {
-        console.log(`Status: ${res.status}`);
-        console.log('Body: ', res.data);
-    }).catch((err) => {
-        console.error(err);
-    });*/
-
-
-/*
-const fileName = 'test.txt';
-const content = 'Hello, woraaaald!';
-
-axios.post('http://localhost:3000/api/create_file', { fileName, content })
-    .then((res) => {
-        console.log(res.data); // 'File created successfully'
-    })
-    .catch((error) => {
-        console.error(error);
-    });*/
-
-/*
-axios.post('http://localhost:3000/api/get_all_content')
-    .then((res) => {
-        console.log(res.data);
-    })
-    .catch((error) => {
-        console.error(error);
-    });*/
-
-
-axios({
-    method: 'post',
-    url: 'http://localhost:3000/api/run',
-    responseType: 'stream'
-})
-.then(function (response) {
-    response.data.on('data', (chunk) => {
-        process.stdout.write(chunk);
-    });
-
-
-    response.data.on('end', () => {
-        console.log('Stream ended');
-    });
-})
-.catch(function (error) {
-    console.error(error);
-});
-    
+ws.on('open', function open() {
+    // Send a message to the server to run a command
+    const message = {
+      type: 'run',
+      payload: 'cd UserCode && node main.js' // replace with your command
+    };
+    ws.send(JSON.stringify(message));
+  });
+  
+  ws.on('message', function incoming(data) {
+    // Handle the server's responses
+    const { type, payload } = JSON.parse(data);
+  
+    switch (type) {
+      case 'stdout':
+        console.log('Server stdout:', payload);
+        break;
+      case 'stderr':
+        console.error('Server stderr:', payload);
+        break;
+      case 'exit':
+        console.log('Server process exited with code:', payload);
+        break;
+      case 'error':
+        console.error('Server error:', payload);
+        break;
+      default:
+        console.log('Unknown message type:', type);
+    }
+  });
+  
+  ws.on('error', function error(err) {
+    console.error('WebSocket error:', err);
+  });
+  
+  ws.on('close', function close(code) {
+    console.log('WebSocket closed with code:', code);
+  });
+  
+  // Create readline interface
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  
+  // Listen for line events from readline
+  rl.on('line', (input) => {
+    const message = {
+      type: 'stdin',
+      payload: input
+    };
+    ws.send(JSON.stringify(message));
+  });
