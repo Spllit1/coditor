@@ -10,8 +10,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "assert": "^2.1.0",
     "axios": "^1.6.8",
     "express": "^4.19.2",
-    "vm2": "^3.9.19"
+    "vm2": "^3.9.19",
+    "ws": "^8.16.0"
   }
 }
