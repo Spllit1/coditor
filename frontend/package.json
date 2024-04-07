@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/lang-javascript": "github:codemirror/lang-javascript",
+    "@uiw/codemirror-theme-atomone": "^4.21.25",
+    "@uiw/react-codemirror": "^4.21.25",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "react": "^18.2.0",
